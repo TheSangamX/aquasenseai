@@ -33,6 +33,9 @@ def get_supabase_client():
     supabase_anon_key = st.secrets.get("SUPABASE_ANON_KEY")
     if not supabase_url or not supabase_anon_key:
         return None
+    if str(supabase_anon_key).startswith("sb_secret_"):
+        st.session_state["auth_error"] = "Do not use Supabase Secret key here. Use the anon/publishable key from Project Settings → API."
+        return None
 
     try:
         return create_client(str(supabase_url), str(supabase_anon_key))

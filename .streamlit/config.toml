@@ -1,0 +1,14 @@
+[theme]
+# Light theme (default)
+primaryColor = "#1f77b4"
+backgroundColor = "#f8fafc"
+secondaryBackgroundColor = "#e2e8f0"
+textColor = "#0f172a"
+font = "sans serif"
+
+[client]
+showErrorDetails = false
+
+[server]
+maxUploadSize = 200
+enableXsrfProtection = true

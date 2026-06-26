@@ -97,11 +97,6 @@ India faces significant challenges in water resource management due to:
 - Custom date range selection
 - Data validation and quality checks
 
-### User Management (Admin Features)
-- User authentication and authorization
-- Role-based access control
-- Audit logging of system activities
-
 ---
 
 ## 6. Non Functional Requirements

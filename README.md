@@ -148,7 +148,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The application will open in browser at (https://aquasenseai1.streamlit.app/)
+The application will open in your browser at: http://localhost:8502
 
 ---
 
@@ -213,6 +213,83 @@ COPY . .
 EXPOSE 8501
 CMD ["streamlit", "run", "app.py", "--server.address", "0.0.0.0"]
 ```
+
+---
+
+# 🚨 Problem Statement
+
+India experiences frequent floods and droughts due to irregular monsoon patterns and inefficient reservoir monitoring systems. Water management authorities often lack a centralized, intelligent platform to monitor reservoir levels, predict future storage conditions, and identify potential risks in advance.
+
+The challenge is to develop a smart and scalable solution that can:
+
+* Monitor reservoir conditions in real time.
+* Predict future water storage and reservoir levels.
+* Identify flood and drought risks early.
+* Provide actionable insights for better decision-making.
+* Improve water resource management across India.
+
+---
+
+# 💡 Proposed Solution
+
+AquaSense AI is an AI-powered Smart Reservoir Monitoring and Prediction Platform designed to help government agencies and water resource authorities make data-driven decisions.
+
+The platform provides:
+
+* Real-time reservoir monitoring dashboard
+* Interactive analytics and visualizations
+* Flood and drought risk assessment
+* Machine learning-based predictions
+* Intelligent recommendations and insights
+* Exportable reports and analytics
+
+---
+
+# 🏗️ System Architecture
+
+```text
+Reservoir Dataset
+        ↓
+Data Cleaning & Preprocessing (Pandas)
+        ↓
+Feature Engineering
+        ↓
+Exploratory Data Analysis
+        ↓
+Machine Learning Models
+        ↓
+Risk Assessment Engine
+        ↓
+Interactive Streamlit Dashboard
+        ↓
+AI Insights & Decision Support
+```
+
+---
+
+# 🚀 Future Scope
+
+The platform can be further enhanced by integrating:
+
+* Real-time reservoir APIs
+* Weather forecasting APIs
+* Satellite and remote sensing data
+* SMS and Email alert system
+* Mobile application for field officers
+* Generative AI Copilot for decision support
+* IoT sensor integration
+* Water demand forecasting
+* Dam operation optimization system
+
+---
+
+# 🌐 Live Application
+
+https://aquasenseai1.streamlit.app
+
+# 💻 GitHub Repository
+
+https://github.com/TheSangamX/aquasenseai
 
 ---
 

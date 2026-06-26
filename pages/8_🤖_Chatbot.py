@@ -2,7 +2,6 @@
 AquaSense AI Chatbot - Gemini Powered
 """
 import streamlit as st
-import google.generativeai as genai
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -15,16 +14,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# Configure Gemini
-try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    chat = model.start_chat(history=[])
-except Exception as e:
-    st.error(f"Error configuring Gemini: {e}")
-    st.info("Please make sure your API key is set in .streamlit/secrets.toml")
-    st.stop()
 
 # Load and prepare data
 @st.cache_data(ttl=3600)
@@ -120,29 +109,34 @@ def load_and_prepare_data():
     avg_storage = round(df["Storage"].mean(), 4)
     avg_level = round(df["Level"].mean(), 2)
     
-    context = f"""
-    AquaSense AI - Smart Reservoir Monitoring System Context
+    metrics = {
+        "total_reservoirs": total_reservoirs,
+        "critical_flood": critical_flood,
+        "high_flood": high_flood,
+        "critical_drought": critical_drought,
+        "high_drought": high_drought,
+        "healthy": healthy,
+        "poor_health": poor_health,
+        "most_affected_basin": most_affected_basin,
+        "avg_storage": avg_storage,
+        "avg_level": avg_level,
+    }
     
-    Total Reservoirs Monitored: {total_reservoirs}
-    Critical Flood Risk Reservoirs: {critical_flood}
-    High Flood Risk Reservoirs: {high_flood}
-    Critical Drought Risk Reservoirs: {critical_drought}
-    High Drought Risk Reservoirs: {high_drought}
-    Healthy Reservoirs (Score >=60): {healthy}
-    Poor Health Reservoirs (Score <40): {poor_health}
-    Most Affected Basin: {most_affected_basin}
-    Average Storage: {avg_storage}
-    Average Reservoir Level: {avg_level}
-    
-    You are AquaSense AI, an expert in reservoir monitoring, hydrology, and water resource management.
-    Always provide answers in simple language, structured with:
-    1. Answer
-    2. Risk Level (if applicable)
-    3. Recommendation (if applicable)
-    """
-    return context, latest_df
+    return metrics, latest_df
 
-context, latest_df = load_and_prepare_data()
+metrics, latest_df = load_and_prepare_data()
+
+# Configure Gemini (optional)
+gemini_available = False
+try:
+    import google.generativeai as genai
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    chat = model.start_chat(history=[])
+    gemini_available = True
+except Exception as e:
+    st.info("Note: Running in fallback mode (no external API).")
+    gemini_available = False
 
 # Page UI
 st.title("🤖 AquaSense AI Assistant")
@@ -188,24 +182,47 @@ if user_input := st.chat_input("Ask about reservoir data..."):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                prompt = f"""
-                You are AquaSense AI, an expert in reservoir monitoring and water resource management.
-                Provide answers in clear, simple language.
-                
-                Context:
-                {context}
-                
-                User Question:
-                {user_input}
-                
-                Please respond with:
-                1. Answer (main response)
-                2. Risk Level (if applicable)
-                3. Recommendation (if applicable)
-                """
-                
-                response = chat.send_message(prompt)
-                answer = response.text
+                if gemini_available:
+                    context = f"""
+                    AquaSense AI - Smart Reservoir Monitoring System Context
+                    
+                    Total Reservoirs Monitored: {metrics['total_reservoirs']}
+                    Critical Flood Risk Reservoirs: {metrics['critical_flood']}
+                    High Flood Risk Reservoirs: {metrics['high_flood']}
+                    Critical Drought Risk Reservoirs: {metrics['critical_drought']}
+                    High Drought Risk Reservoirs: {metrics['high_drought']}
+                    Healthy Reservoirs (Score >=60): {metrics['healthy']}
+                    Poor Health Reservoirs (Score <40): {metrics['poor_health']}
+                    Most Affected Basin: {metrics['most_affected_basin']}
+                    Average Storage: {metrics['avg_storage']}
+                    Average Reservoir Level: {metrics['avg_level']}
+                    
+                    You are AquaSense AI, an expert in reservoir monitoring, hydrology, and water resource management.
+                    Always provide answers in simple language, structured with:
+                    1. Answer
+                    2. Risk Level (if applicable)
+                    3. Recommendation (if applicable)
+                    """
+                    prompt = f"""
+                    You are AquaSense AI, an expert in reservoir monitoring and water resource management.
+                    Provide answers in clear, simple language.
+                    
+                    Context:
+                    {context}
+                    
+                    User Question:
+                    {user_input}
+                    
+                    Please respond with:
+                    1. Answer (main response)
+                    2. Risk Level (if applicable)
+                    3. Recommendation (if applicable)
+                    """
+                    response = chat.send_message(prompt)
+                    answer = response.text
+                else:
+                    # Fallback responses
+                    answer = get_fallback_response(user_input.lower(), metrics)
                 
                 st.markdown(answer)
                 st.session_state.messages.append({
@@ -214,8 +231,81 @@ if user_input := st.chat_input("Ask about reservoir data..."):
                 })
                 
             except Exception as e:
-                st.error(f"Oops! Something went wrong: {e}")
+                st.error(f"Oops! Using fallback response.")
+                fallback_answer = get_fallback_response(user_input.lower(), metrics)
+                st.markdown(fallback_answer)
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": fallback_answer
+                })
+
+def get_fallback_response(user_input, metrics):
+    # Basic keyword matching
+    user_input = user_input.lower()
+    
+    if any(keyword in user_input for keyword in ["flood", "flood risk", "flooding"]):
+        return f"""
+        1. **Answer**: There are **{metrics['critical_flood']} reservoirs at critical flood risk** and **{metrics['high_flood']} at high risk**.
+        
+        2. **Risk Level**: High
+        
+        3. **Recommendation**: Monitor these reservoirs closely, consider controlled water releases, and activate flood alert systems for nearby areas.
+        """
+    
+    if any(keyword in user_input for keyword in ["drought", "water scarcity", "dry"]):
+        return f"""
+        1. **Answer**: There are **{metrics['critical_drought']} reservoirs at critical drought risk** and **{metrics['high_drought']} at high risk**.
+        
+        2. **Risk Level**: High
+        
+        3. **Recommendation**: Implement water conservation measures, prioritize essential water usage, and consider groundwater recharge programs.
+        """
+    
+    if any(keyword in user_input for keyword in ["health", "system health", "healthy"]):
+        return f"""
+        1. **Answer**: Out of {metrics['total_reservoirs']} reservoirs, **{metrics['healthy']} are in good health** and **{metrics['poor_health']} need immediate attention**.
+        
+        2. **Risk Level**: Moderate
+        
+        3. **Recommendation**: Focus on reservoirs in poor health, conduct inspections, and optimize water allocation.
+        """
+    
+    if any(keyword in user_input for keyword in ["basin", "basins", "most affected"]):
+        return f"""
+        1. **Answer**: The most affected basin is **{metrics['most_affected_basin']}**.
+        
+        2. **Risk Level**: High
+        
+        3. **Recommendation**: Increase monitoring in this basin and implement targeted water management strategies.
+        """
+    
+    if any(keyword in user_input for keyword in ["attention", "immediate", "urgent"]):
+        total_critical = metrics['critical_flood'] + metrics['critical_drought']
+        return f"""
+        1. **Answer**: There are **{total_critical} reservoirs** that need immediate attention (critical flood or drought risk).
+        
+        2. **Risk Level**: Critical
+        
+        3. **Recommendation**: Prioritize these reservoirs for inspection, monitoring, and intervention.
+        """
+    
+    # Default
+    return f"""
+    1. **Answer**: Hi! Here are today's key stats:
+    - Total reservoirs: {metrics['total_reservoirs']}
+    - Healthy reservoirs: {metrics['healthy']}
+    - Critical flood risk: {metrics['critical_flood']}
+    - Critical drought risk: {metrics['critical_drought']}
+    
+    2. **Risk Level**: Moderate
+    
+    3. **Recommendation**: Keep monitoring the system, especially reservoirs in critical categories.
+    """
 
 # Footer
 st.markdown("---")
-st.markdown("<center>Powered by Google Gemini 2.5 Flash</center>", unsafe_allow_html=True)
+if gemini_available:
+    st.markdown("<center>Powered by Google Gemini 2.5 Flash</center>", unsafe_allow_html=True)
+else:
+    st.markdown("<center>Powered by AquaSense AI Smart Responses</center>", unsafe_allow_html=True)
+

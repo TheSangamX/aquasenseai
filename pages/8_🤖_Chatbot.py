@@ -6,7 +6,6 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import data_loader
-from utils.auth import require_login, render_auth_sidebar
 
 # Set page config
 st.set_page_config(
@@ -15,9 +14,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-require_login(post_login_page="pages/8_🤖_Chatbot.py")
-render_auth_sidebar()
 
 def get_fallback_response(user_input, metrics):
     user_input = user_input.lower()
@@ -192,21 +188,25 @@ def load_and_prepare_data():
 
 metrics, latest_df = load_and_prepare_data()
 
-
 # Configure OpenRouter
 api_available = False
 client = None
 try:
     from openai import OpenAI
-
-    openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
-    if openrouter_key:
-        client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=openrouter_key,
-        )
-        api_available = True
-except Exception:
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=st.secrets["OPENROUTER_API_KEY"],
+    )
+    # Test connection
+    test_response = client.chat.completions.create(
+        model="google/gemini-2.5-flash-preview-04-23",
+        messages=[{"role":"user","content":"hi"}],
+        max_tokens=5
+    )
+    api_available = True
+    st.success("Connected to OpenRouter!")
+except Exception as e:
+    st.info(f"Note: Running in fallback mode (OpenRouter failed: {str(e)[:100]})")
     api_available = False
 
 # Page UI

@@ -10,7 +10,6 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import data_loader
-from utils.auth import require_login, render_auth_sidebar
 
 
 # Set page config
@@ -20,9 +19,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-require_login(post_login_page="pages/1_🏠_Home.py")
-render_auth_sidebar()
 
 
 # Load data with caching

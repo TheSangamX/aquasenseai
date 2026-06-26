@@ -1,5 +1,5 @@
 """
-AquaSense AI Chatbot - Gemini Powered
+AquaSense AI Chatbot - OpenRouter Powered
 """
 import streamlit as st
 import sys
@@ -112,8 +112,8 @@ def load_and_prepare_data():
     metrics = {
         "total_reservoirs": total_reservoirs,
         "critical_flood": critical_flood,
-        "high_flood": high_flood,
         "critical_drought": critical_drought,
+        "high_flood": high_flood,
         "high_drought": high_drought,
         "healthy": healthy,
         "poor_health": poor_health,
@@ -126,17 +126,19 @@ def load_and_prepare_data():
 
 metrics, latest_df = load_and_prepare_data()
 
-# Configure Gemini (optional)
-gemini_available = False
+# Configure OpenRouter
+api_available = False
+client = None
 try:
-    import google.generativeai as genai
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    chat = model.start_chat(history=[])
-    gemini_available = True
+    from openai import OpenAI
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=st.secrets["OPENROUTER_API_KEY"],
+    )
+    api_available = True
 except Exception as e:
     st.info("Note: Running in fallback mode (no external API).")
-    gemini_available = False
+    api_available = False
 
 # Page UI
 st.title("🤖 AquaSense AI Assistant")
@@ -157,6 +159,7 @@ st.markdown("---")
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
+    st.session_state.openrouter_messages = []
     # Welcome message
     st.session_state.messages.append({
         "role": "assistant",
@@ -170,7 +173,6 @@ for msg in st.session_state.messages:
 
 # User input
 if user_input := st.chat_input("Ask about reservoir data..."):
-    # Add user message to history
     st.session_state.messages.append({
         "role": "user",
         "content": user_input
@@ -178,14 +180,12 @@ if user_input := st.chat_input("Ask about reservoir data..."):
     with st.chat_message("user"):
         st.markdown(user_input)
     
-    # Generate response
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                if gemini_available:
+                if api_available:
                     context = f"""
                     AquaSense AI - Smart Reservoir Monitoring System Context
-                    
                     Total Reservoirs Monitored: {metrics['total_reservoirs']}
                     Critical Flood Risk Reservoirs: {metrics['critical_flood']}
                     High Flood Risk Reservoirs: {metrics['high_flood']}
@@ -203,44 +203,42 @@ if user_input := st.chat_input("Ask about reservoir data..."):
                     2. Risk Level (if applicable)
                     3. Recommendation (if applicable)
                     """
-                    prompt = f"""
+                    
+                    system_prompt = f"""
                     You are AquaSense AI, an expert in reservoir monitoring and water resource management.
                     Provide answers in clear, simple language.
                     
                     Context:
                     {context}
-                    
-                    User Question:
-                    {user_input}
-                    
-                    Please respond with:
-                    1. Answer (main response)
-                    2. Risk Level (if applicable)
-                    3. Recommendation (if applicable)
                     """
-                    response = chat.send_message(prompt)
-                    answer = response.text
+                    
+                    # Build messages list
+                    messages_for_api = [{"role": "system", "content": system_prompt}]
+                    # Add history
+                    for msg in st.session_state.openrouter_messages[-10:]: # last 10 messages
+                        messages_for_api.append(msg)
+                    messages_for_api.append({"role": "user", "content": user_input})
+                    
+                    response = client.chat.completions.create(
+                        model="google/gemini-2.5-flash-preview-04-23",
+                        messages=messages_for_api
+                    )
+                    answer = response.choices[0].message.content
+                    st.session_state.openrouter_messages.append({"role": "user", "content": user_input})
+                    st.session_state.openrouter_messages.append({"role": "assistant", "content": answer})
                 else:
-                    # Fallback responses
                     answer = get_fallback_response(user_input.lower(), metrics)
                 
                 st.markdown(answer)
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": answer
-                })
+                st.session_state.messages.append({"role": "assistant", "content": answer})
                 
             except Exception as e:
                 st.error(f"Oops! Using fallback response.")
                 fallback_answer = get_fallback_response(user_input.lower(), metrics)
                 st.markdown(fallback_answer)
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": fallback_answer
-                })
+                st.session_state.messages.append({"role": "assistant", "content": fallback_answer})
 
 def get_fallback_response(user_input, metrics):
-    # Basic keyword matching
     user_input = user_input.lower()
     
     if any(keyword in user_input for keyword in ["flood", "flood risk", "flooding"]):
@@ -304,8 +302,7 @@ def get_fallback_response(user_input, metrics):
 
 # Footer
 st.markdown("---")
-if gemini_available:
-    st.markdown("<center>Powered by Google Gemini 2.5 Flash</center>", unsafe_allow_html=True)
+if api_available:
+    st.markdown("<center>Powered by OpenRouter (Gemini 2.5 Flash</center>", unsafe_allow_html=True)
 else:
     st.markdown("<center>Powered by AquaSense AI Smart Responses</center>", unsafe_allow_html=True)
-

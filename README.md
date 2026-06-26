@@ -148,7 +148,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The application will open in browser at http://localhost:8501
+The application will open in browser at (https://aquasenseai1.streamlit.app/)
 
 ---
 

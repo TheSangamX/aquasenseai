@@ -15,6 +15,68 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+def get_fallback_response(user_input, metrics):
+    user_input = user_input.lower()
+    
+    if any(keyword in user_input for keyword in ["flood", "flood risk", "flooding"]):
+        return f"""
+        1. **Answer**: There are **{metrics['critical_flood']} reservoirs at critical flood risk** and **{metrics['high_flood']} at high risk**.
+        
+        2. **Risk Level**: High
+        
+        3. **Recommendation**: Monitor these reservoirs closely, consider controlled water releases, and activate flood alert systems for nearby areas.
+        """
+    
+    if any(keyword in user_input for keyword in ["drought", "water scarcity", "dry"]):
+        return f"""
+        1. **Answer**: There are **{metrics['critical_drought']} reservoirs at critical drought risk** and **{metrics['high_drought']} at high risk**.
+        
+        2. **Risk Level**: High
+        
+        3. **Recommendation**: Implement water conservation measures, prioritize essential water usage, and consider groundwater recharge programs.
+        """
+    
+    if any(keyword in user_input for keyword in ["health", "system health", "healthy"]):
+        return f"""
+        1. **Answer**: Out of {metrics['total_reservoirs']} reservoirs, **{metrics['healthy']} are in good health** and **{metrics['poor_health']} need immediate attention**.
+        
+        2. **Risk Level**: Moderate
+        
+        3. **Recommendation**: Focus on reservoirs in poor health, conduct inspections, and optimize water allocation.
+        """
+    
+    if any(keyword in user_input for keyword in ["basin", "basins", "most affected"]):
+        return f"""
+        1. **Answer**: The most affected basin is **{metrics['most_affected_basin']}**.
+        
+        2. **Risk Level**: High
+        
+        3. **Recommendation**: Increase monitoring in this basin and implement targeted water management strategies.
+        """
+    
+    if any(keyword in user_input for keyword in ["attention", "immediate", "urgent"]):
+        total_critical = metrics['critical_flood'] + metrics['critical_drought']
+        return f"""
+        1. **Answer**: There are **{total_critical} reservoirs** that need immediate attention (critical flood or drought risk).
+        
+        2. **Risk Level**: Critical
+        
+        3. **Recommendation**: Prioritize these reservoirs for inspection, monitoring, and intervention.
+        """
+    
+    # Default
+    return f"""
+    1. **Answer**: Hi! Here are today's key stats:
+    - Total reservoirs: {metrics['total_reservoirs']}
+    - Healthy reservoirs: {metrics['healthy']}
+    - Critical flood risk: {metrics['critical_flood']}
+    - Critical drought risk: {metrics['critical_drought']}
+    
+    2. **Risk Level**: Moderate
+    
+    3. **Recommendation**: Keep monitoring the system, especially reservoirs in critical categories.
+    """
+
 # Load and prepare data
 @st.cache_data(ttl=3600)
 def load_and_prepare_data():
@@ -238,71 +300,9 @@ if user_input := st.chat_input("Ask about reservoir data..."):
                 st.markdown(fallback_answer)
                 st.session_state.messages.append({"role": "assistant", "content": fallback_answer})
 
-def get_fallback_response(user_input, metrics):
-    user_input = user_input.lower()
-    
-    if any(keyword in user_input for keyword in ["flood", "flood risk", "flooding"]):
-        return f"""
-        1. **Answer**: There are **{metrics['critical_flood']} reservoirs at critical flood risk** and **{metrics['high_flood']} at high risk**.
-        
-        2. **Risk Level**: High
-        
-        3. **Recommendation**: Monitor these reservoirs closely, consider controlled water releases, and activate flood alert systems for nearby areas.
-        """
-    
-    if any(keyword in user_input for keyword in ["drought", "water scarcity", "dry"]):
-        return f"""
-        1. **Answer**: There are **{metrics['critical_drought']} reservoirs at critical drought risk** and **{metrics['high_drought']} at high risk**.
-        
-        2. **Risk Level**: High
-        
-        3. **Recommendation**: Implement water conservation measures, prioritize essential water usage, and consider groundwater recharge programs.
-        """
-    
-    if any(keyword in user_input for keyword in ["health", "system health", "healthy"]):
-        return f"""
-        1. **Answer**: Out of {metrics['total_reservoirs']} reservoirs, **{metrics['healthy']} are in good health** and **{metrics['poor_health']} need immediate attention**.
-        
-        2. **Risk Level**: Moderate
-        
-        3. **Recommendation**: Focus on reservoirs in poor health, conduct inspections, and optimize water allocation.
-        """
-    
-    if any(keyword in user_input for keyword in ["basin", "basins", "most affected"]):
-        return f"""
-        1. **Answer**: The most affected basin is **{metrics['most_affected_basin']}**.
-        
-        2. **Risk Level**: High
-        
-        3. **Recommendation**: Increase monitoring in this basin and implement targeted water management strategies.
-        """
-    
-    if any(keyword in user_input for keyword in ["attention", "immediate", "urgent"]):
-        total_critical = metrics['critical_flood'] + metrics['critical_drought']
-        return f"""
-        1. **Answer**: There are **{total_critical} reservoirs** that need immediate attention (critical flood or drought risk).
-        
-        2. **Risk Level**: Critical
-        
-        3. **Recommendation**: Prioritize these reservoirs for inspection, monitoring, and intervention.
-        """
-    
-    # Default
-    return f"""
-    1. **Answer**: Hi! Here are today's key stats:
-    - Total reservoirs: {metrics['total_reservoirs']}
-    - Healthy reservoirs: {metrics['healthy']}
-    - Critical flood risk: {metrics['critical_flood']}
-    - Critical drought risk: {metrics['critical_drought']}
-    
-    2. **Risk Level**: Moderate
-    
-    3. **Recommendation**: Keep monitoring the system, especially reservoirs in critical categories.
-    """
-
 # Footer
 st.markdown("---")
 if api_available:
-    st.markdown("<center>Powered by OpenRouter (Gemini 2.5 Flash</center>", unsafe_allow_html=True)
+    st.markdown("<center>Powered by OpenRouter (Gemini 2.5 Flash)</center>", unsafe_allow_html=True)
 else:
     st.markdown("<center>Powered by AquaSense AI Smart Responses</center>", unsafe_allow_html=True)

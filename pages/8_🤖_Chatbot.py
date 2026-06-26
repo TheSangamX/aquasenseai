@@ -188,25 +188,124 @@ def load_and_prepare_data():
 
 metrics, latest_df = load_and_prepare_data()
 
+supabase_available = False
+supabase = None
+try:
+    from supabase import create_client
+
+    supabase_url = st.secrets.get("SUPABASE_URL")
+    supabase_anon_key = st.secrets.get("SUPABASE_ANON_KEY")
+
+    if supabase_url and supabase_anon_key:
+        supabase = create_client(supabase_url, supabase_anon_key)
+        supabase_available = True
+except Exception:
+    supabase_available = False
+
+
+def _get_query_params():
+    try:
+        return dict(st.query_params)
+    except Exception:
+        return st.experimental_get_query_params()
+
+
+def _clear_query_params():
+    try:
+        st.query_params.clear()
+    except Exception:
+        st.experimental_set_query_params()
+
+
+def _get_app_base_url():
+    base = st.secrets.get("APP_BASE_URL")
+    if base:
+        return str(base).rstrip("/")
+    return "http://localhost:8502"
+
+
+def _get_redirect_to():
+    return f"{_get_app_base_url()}/Chatbot"
+
+
+if not supabase_available:
+    st.error("Supabase auth is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY in .streamlit/secrets.toml")
+    st.stop()
+
+
+params = _get_query_params()
+oauth_code = params.get("code")
+if isinstance(oauth_code, list):
+    oauth_code = oauth_code[0] if oauth_code else None
+
+oauth_error = params.get("error_description") or params.get("error")
+if isinstance(oauth_error, list):
+    oauth_error = oauth_error[0] if oauth_error else None
+
+if oauth_error:
+    st.error(f"Login failed: {oauth_error}")
+    _clear_query_params()
+
+if oauth_code and "supabase_user" not in st.session_state:
+    try:
+        auth_response = supabase.auth.exchange_code_for_session({"auth_code": oauth_code})
+        user = getattr(auth_response, "user", None) or getattr(getattr(auth_response, "data", None), "user", None)
+        st.session_state.supabase_user = user
+        _clear_query_params()
+        st.rerun()
+    except Exception as e:
+        st.error(f"Could not complete login: {str(e)[:200]}")
+        _clear_query_params()
+
+if "supabase_user" not in st.session_state:
+    st.title("🔐 Sign in required")
+    st.write("Continue with Google to access the AquaSense AI Assistant.")
+    redirect_to = _get_redirect_to()
+    if st.button("Continue with Google", type="primary", use_container_width=True):
+        try:
+            oauth = supabase.auth.sign_in_with_oauth(
+                {"provider": "google", "options": {"redirect_to": redirect_to}}
+            )
+            url = getattr(oauth, "url", None) or getattr(getattr(oauth, "data", None), "url", None)
+            if not url and hasattr(oauth, "get"):
+                url = oauth.get("url")
+            if not url:
+                raise RuntimeError("OAuth URL not returned by Supabase.")
+            st.session_state.oauth_url = url
+        except Exception as e:
+            st.error(f"Could not start Google login: {str(e)[:200]}")
+
+    url = st.session_state.get("oauth_url")
+    if url:
+        st.link_button("Open Google Login", url, use_container_width=True)
+        st.caption("After login, you will be redirected back automatically.")
+    st.stop()
+
+if st.sidebar.button("Logout", use_container_width=True):
+    try:
+        supabase.auth.sign_out()
+    except Exception:
+        pass
+    for k in ["supabase_user", "oauth_url", "messages", "openrouter_messages"]:
+        if k in st.session_state:
+            del st.session_state[k]
+    st.rerun()
+
+
 # Configure OpenRouter
 api_available = False
 client = None
 try:
     from openai import OpenAI
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=st.secrets["OPENROUTER_API_KEY"],
-    )
-    # Test connection
-    test_response = client.chat.completions.create(
-        model="google/gemini-2.5-flash-preview-04-23",
-        messages=[{"role":"user","content":"hi"}],
-        max_tokens=5
-    )
-    api_available = True
-    st.success("Connected to OpenRouter!")
-except Exception as e:
-    st.info(f"Note: Running in fallback mode (OpenRouter failed: {str(e)[:100]})")
+
+    openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
+    if openrouter_key:
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=openrouter_key,
+        )
+        api_available = True
+except Exception:
     api_available = False
 
 # Page UI

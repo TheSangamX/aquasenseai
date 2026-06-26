@@ -27,6 +27,12 @@ def main():
         }
     )
 
+    from utils.auth import redirect_after_login, render_auth_sidebar, require_login
+
+    require_login()
+    redirect_after_login(default_page="pages/1_🏠_Home.py")
+    render_auth_sidebar()
+
     # Title section
     st.title("💧 AquaSense AI")
     st.subheader("Smart Reservoir Monitoring & Prediction System")

@@ -1,5 +1,9 @@
 import streamlit as st
 from typing import Optional
+import base64
+import hashlib
+import secrets
+from urllib.parse import quote
 
 
 def _get_query_params():
@@ -21,6 +25,33 @@ def _get_app_base_url():
     if base:
         return str(base).rstrip("/")
     return "http://localhost:8502"
+
+
+@st.cache_resource
+def _pkce_store():
+    return {}
+
+
+def _base64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
+
+
+def _new_pkce_pair():
+    verifier = secrets.token_urlsafe(64)
+    challenge = _base64url(hashlib.sha256(verifier.encode("utf-8")).digest())
+    return verifier, challenge
+
+
+def _build_google_authorize_url(redirect_to: str, state: str, code_challenge: str) -> str:
+    supabase_url = str(st.secrets.get("SUPABASE_URL", "")).rstrip("/")
+    return (
+        f"{supabase_url}/auth/v1/authorize"
+        f"?provider=google"
+        f"&redirect_to={quote(redirect_to, safe='')}"
+        f"&code_challenge={quote(code_challenge, safe='')}"
+        f"&code_challenge_method=s256"
+        f"&state={quote(state, safe='')}"
+    )
 
 
 def get_supabase_client():
@@ -74,9 +105,13 @@ def _extract_oauth_url(oauth_response):
 def handle_auth_callback():
     params = _get_query_params()
 
-    code = params.get("code")
+    code = params.get("code") or params.get("auth_code")
     if isinstance(code, list):
         code = code[0] if code else None
+
+    state = params.get("state")
+    if isinstance(state, list):
+        state = state[0] if state else None
 
     error_desc = params.get("error_description") or params.get("error")
     if isinstance(error_desc, list):
@@ -101,9 +136,30 @@ def handle_auth_callback():
         return
 
     try:
-        auth_response = supabase.auth.exchange_code_for_session({"auth_code": code})
+        store = _pkce_store()
+        stored = store.get(state) if state else None
+        code_verifier = None
+        post_login_page = None
+        if isinstance(stored, dict):
+            code_verifier = stored.get("code_verifier")
+            post_login_page = stored.get("post_login_page")
+        if not code_verifier:
+            st.session_state["auth_error"] = "invalid request: missing PKCE code_verifier. Please click 'Continue with Google' again."
+            _clear_query_params()
+            return
+
+        redirect_to = f"{_get_app_base_url()}/"
+        auth_response = supabase.auth.exchange_code_for_session(
+            {"auth_code": code, "code_verifier": code_verifier, "redirect_to": redirect_to}
+        )
         user = _extract_user(auth_response)
         st.session_state["supabase_user"] = user
+        if post_login_page and "post_login_page" not in st.session_state:
+            st.session_state["post_login_page"] = post_login_page
+        if state and state in store:
+            del store[state]
+        if "oauth_url" in st.session_state:
+            del st.session_state["oauth_url"]
         _clear_query_params()
         st.rerun()
     except Exception as e:
@@ -163,13 +219,13 @@ def require_login(post_login_page: Optional[str] = None):
 
     if st.button("Continue with Google", type="primary", use_container_width=True):
         try:
-            oauth = supabase.auth.sign_in_with_oauth(
-                {"provider": "google", "options": {"redirect_to": redirect_to}}
+            store = _pkce_store()
+            state = secrets.token_urlsafe(16)
+            code_verifier, code_challenge = _new_pkce_pair()
+            store[state] = {"code_verifier": code_verifier, "post_login_page": post_login_page}
+            st.session_state["oauth_url"] = _build_google_authorize_url(
+                redirect_to=redirect_to, state=state, code_challenge=code_challenge
             )
-            url = _extract_oauth_url(oauth)
-            if not url:
-                raise RuntimeError("OAuth URL not returned by Supabase.")
-            st.session_state["oauth_url"] = url
         except Exception as e:
             st.error(f"Could not start Google login: {str(e)[:200]}")
 

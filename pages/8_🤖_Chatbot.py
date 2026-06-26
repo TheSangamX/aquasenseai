@@ -197,9 +197,16 @@ try:
         base_url="https://openrouter.ai/api/v1",
         api_key=st.secrets["OPENROUTER_API_KEY"],
     )
+    # Test connection
+    test_response = client.chat.completions.create(
+        model="google/gemini-2.5-flash-preview-04-23",
+        messages=[{"role":"user","content":"hi"}],
+        max_tokens=5
+    )
     api_available = True
+    st.success("Connected to OpenRouter!")
 except Exception as e:
-    st.info("Note: Running in fallback mode (no external API).")
+    st.info(f"Note: Running in fallback mode (OpenRouter failed: {str(e)[:100]})")
     api_available = False
 
 # Page UI
@@ -295,7 +302,7 @@ if user_input := st.chat_input("Ask about reservoir data..."):
                 st.session_state.messages.append({"role": "assistant", "content": answer})
                 
             except Exception as e:
-                st.error(f"Oops! Using fallback response.")
+                st.error(f"Oops! OpenRouter failed: {str(e)[:200]}")
                 fallback_answer = get_fallback_response(user_input.lower(), metrics)
                 st.markdown(fallback_answer)
                 st.session_state.messages.append({"role": "assistant", "content": fallback_answer})
